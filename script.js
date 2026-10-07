@@ -62,10 +62,12 @@ async function loadCloudData() {
     }
 
     renderStudents();
+    updateDeleteDropdown();
   } catch (error) {
     console.error("Gagal sinkron data dari cloud:", error);
     students = DEFAULT_STUDENTS;
     renderStudents();
+    updateDeleteDropdown();
   }
 }
 
@@ -207,12 +209,64 @@ function updateDateTime() {
   if (timeEl) timeEl.textContent = now.toLocaleTimeString("id-ID");
 }
 
-// ================= MANAJEMEN SISWA (TAMBAH & HAPUS) =================
-function initStudentManagement() {
-  const addStudentForm = document.getElementById("add-student-form");
+// ================= MODAL KELOLA SISWA (IKON LOGO) =================
+function updateDeleteDropdown() {
+  const select = document.getElementById("delete-student-select");
+  if (!select) return;
 
-  if (addStudentForm) {
-    addStudentForm.addEventListener("submit", async (e) => {
+  select.innerHTML = '<option value="">-- Pilih Siswa --</option>';
+  students.forEach(s => {
+    const opt = document.createElement("option");
+    opt.value = s.id;
+    opt.textContent = `${s.name} (${s.gender === 'L' ? 'L' : 'P'})`;
+    select.appendChild(opt);
+  });
+}
+
+function initStudentManagement() {
+  const manageModal = document.getElementById("student-manage-modal");
+  const openBtn = document.getElementById("open-manage-modal-btn");
+  const closeBtn = document.getElementById("close-manage-modal-btn");
+
+  const tabAdd = document.getElementById("tab-add-student-btn");
+  const tabDel = document.getElementById("tab-del-student-btn");
+  const formAdd = document.getElementById("add-student-form");
+  const formDel = document.getElementById("delete-student-form");
+
+  // Buka & Tutup Modal Manajemen Siswa dari Logo
+  if (openBtn && manageModal) {
+    openBtn.addEventListener("click", () => {
+      updateDeleteDropdown();
+      manageModal.classList.remove("hidden");
+    });
+  }
+
+  if (closeBtn && manageModal) {
+    closeBtn.addEventListener("click", () => {
+      manageModal.classList.add("hidden");
+    });
+  }
+
+  // Tab switch Tambah / Hapus di modal
+  if (tabAdd && tabDel) {
+    tabAdd.addEventListener("click", () => {
+      formAdd.classList.remove("hidden");
+      formDel.classList.add("hidden");
+      tabAdd.className = "w-1/2 py-1.5 text-xs font-semibold text-blue-600 border-b-2 border-blue-600";
+      tabDel.className = "w-1/2 py-1.5 text-xs font-semibold text-gray-400 border-b-2 border-transparent hover:text-gray-600";
+    });
+
+    tabDel.addEventListener("click", () => {
+      formDel.classList.remove("hidden");
+      formAdd.classList.add("hidden");
+      tabDel.className = "w-1/2 py-1.5 text-xs font-semibold text-blue-600 border-b-2 border-blue-600";
+      tabAdd.className = "w-1/2 py-1.5 text-xs font-semibold text-gray-400 border-b-2 border-transparent hover:text-gray-600";
+    });
+  }
+
+  // Tambah Siswa Baru
+  if (formAdd) {
+    formAdd.addEventListener("submit", async (e) => {
       e.preventDefault();
       const nameInput = document.getElementById("new-student-name");
       const genderInput = document.getElementById("new-student-gender");
@@ -235,24 +289,43 @@ function initStudentManagement() {
 
       students.push(newStudent);
       renderStudents();
+      updateDeleteDropdown();
       await saveCloudData();
       addLog(`Siswa ditambahkan: ${name}`);
 
       nameInput.value = "";
+      alert(`Siswa "${name}" berhasil ditambahkan!`);
+      manageModal.classList.add("hidden");
     });
   }
-}
 
-async function deleteStudent(id) {
-  const student = students.find(s => s.id === id);
-  if (!student) return;
+  // Hapus Siswa Terpilih
+  if (formDel) {
+    formDel.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const select = document.getElementById("delete-student-select");
+      const selectedId = parseInt(select.value);
 
-  const confirmDelete = confirm(`Hapus siswa "${student.name}"?`);
-  if (confirmDelete) {
-    students = students.filter(s => s.id !== id);
-    renderStudents();
-    await saveCloudData();
-    addLog(`Siswa dihapus: ${student.name}`);
+      if (!selectedId) {
+        alert("Pilih siswa yang ingin dihapus terlebih dahulu!");
+        return;
+      }
+
+      const student = students.find(s => s.id === selectedId);
+      if (!student) return;
+
+      const confirmDelete = confirm(`Apakah Anda yakin ingin menghapus data siswa "${student.name}"?`);
+      if (confirmDelete) {
+        students = students.filter(s => s.id !== selectedId);
+        renderStudents();
+        updateDeleteDropdown();
+        await saveCloudData();
+        addLog(`Siswa dihapus: ${student.name}`);
+        select.value = "";
+        alert(`Siswa "${student.name}" telah dihapus.`);
+        manageModal.classList.add("hidden");
+      }
+    });
   }
 }
 
@@ -306,17 +379,12 @@ function renderStudents(filter = activeFilter) {
         </div>
       </div>
       
-      <div class="flex gap-1 w-full sm:w-auto justify-end flex-wrap items-center">
-        <button onclick="setStatus(${student.id}, 'Hadir')" class="px-2.5 py-1 text-xs font-semibold rounded bg-green-500 hover:bg-green-600 text-white">Hadir</button>
-        <button onclick="setStatus(${student.id}, 'Sakit')" class="px-2.5 py-1 text-xs font-semibold rounded bg-indigo-500 hover:bg-indigo-600 text-white">Sakit</button>
-        <button onclick="setStatus(${student.id}, 'Izin')" class="px-2.5 py-1 text-xs font-semibold rounded bg-yellow-500 hover:bg-yellow-600 text-white">Izin</button>
-        <button onclick="setStatus(${student.id}, 'Alpa')" class="px-2.5 py-1 text-xs font-semibold rounded bg-red-500 hover:bg-red-600 text-white">Alpa</button>
-        <button onclick="checkOutStudent(${student.id})" class="px-2.5 py-1 text-xs font-semibold rounded bg-purple-500 hover:bg-purple-600 text-white">Pulang</button>
-        <button onclick="deleteStudent(${student.id})" title="Hapus Siswa" class="px-2 py-1 text-xs font-semibold rounded bg-gray-100 hover:bg-red-100 text-red-600 ml-1 border border-gray-200">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-        </button>
+      <div class="flex gap-1.5 w-full sm:w-auto justify-end flex-wrap items-center">
+        <button onclick="setStatus(${student.id}, 'Hadir')" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-500 hover:bg-green-600 text-white transition">Hadir</button>
+        <button onclick="setStatus(${student.id}, 'Sakit')" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white transition">Sakit</button>
+        <button onclick="setStatus(${student.id}, 'Izin')" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-yellow-500 hover:bg-yellow-600 text-white transition">Izin</button>
+        <button onclick="setStatus(${student.id}, 'Alpa')" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-500 hover:bg-red-600 text-white transition">Alpa</button>
+        <button onclick="checkOutStudent(${student.id})" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-500 hover:bg-purple-600 text-white transition">Pulang</button>
       </div>
     `;
     studentList.appendChild(card);
@@ -492,7 +560,6 @@ document.addEventListener("DOMContentLoaded", () => {
   updateDateTime();
   setInterval(updateDateTime, 1000);
 
-  // Muat data langsung dari cloud JSONBin
   loadCloudData();
   initializeRecapFeature();
 
